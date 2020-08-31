@@ -22,8 +22,7 @@ for i in range(0,len(png_files)):
     print(str(i+1) + ". " + png_files[i])
 print("Type image number to begin OCR:")
 value = int(input())
-file = png_files[value-1]
-
+file = png_files[value-1] #store filename into file
 
 # Part 2: Preliminary Analysis and Transformation
 # Part 2.1: Read Image
@@ -36,6 +35,7 @@ ret, binarised = cv2.threshold(im1, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_O
 i = 0
 while i == 0:
     i = sum(binarised[:,0])
+    #if column contains non-white pixels then delete
     if i > 0:
         break
     binarised = np.delete(binarised, 0, axis = 1)
@@ -67,10 +67,11 @@ while j == 0:
 #Add border
 binarised = cv2.copyMakeBorder(binarised, 40, 40, 40, 40, cv2.BORDER_CONSTANT, value= [0,0,0])
 
-#Remove Lines
+#Remove lines from image
 col_lines = []
 row_lines = []
 
+#Detect lines on image
 for i in range(0, binarised.shape[1]):
     colpct = sum(binarised[:,i]) / (255 * binarised.shape[0])  # find percentage of col filled
     if colpct > 0.8:
@@ -81,24 +82,26 @@ for j in range(0, binarised.shape[0]):
     if colpct > 0.8:
         row_lines.append(j)
 
-#Removes lines from image
+#Delete Lines
 binarised = np.delete(binarised, col_lines, axis = 1)
 binarised = np.delete(binarised, row_lines, axis = 0)
 
 
 # Part 2.3: Average Feature Size
-contours, hierarchy = cv2.findContours(binarised, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+contours, hierarchy = cv2.findContours(binarised, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE) #detect features
 features = np.empty((0,4), int)
 for cnt in contours:
     x, y, w, h = cv2.boundingRect(cnt)
     features = np.append(features,
                          np.array([[x,y,w,h]]),
                          axis=0)
-avg_width = int(round(sum(features[:,2])/len(features)))
-avg_height = int(round(sum(features[:,3])/len(features)))
+avg_width = int(round(sum(features[:,2])/len(features))) #calculate average width of characters
+avg_height = int(round(sum(features[:,3])/len(features))) #calculate average height of characters
 print("Average character size is " + str(avg_width) + " by " + str(avg_height) + " pixels")
 
 # Part 2.4: Image Preprocessing
+
+#resize image
 if avg_width*avg_height < 900:
     print("Image too small, resizing to minimum character size of 25 by 25 pixels...")
     scale = 30/avg_width
@@ -149,15 +152,15 @@ zeros = np.zeros(len(row_hist))
 cluster_row = np.empty((len(row_hist),3),int)
 cluster_row[:,0] = row_hist
 cluster_row[:,1] = zeros
-km = KMeans(n_clusters=2)
-cluster_row[:,2] = km.fit_predict(cluster_row[:,0:1])
+km = KMeans(n_clusters=2) #set number of clusters to two (whitespace and nonwhitespace)
+cluster_row[:,2] = km.fit_predict(cluster_row[:,0:1]) #run algoirthm on projection histogram
 
 zeros = np.zeros(len(col_hist))
 cluster_col = np.empty((len(col_hist),3),int)
 cluster_col[:, 0] = col_hist
 cluster_col[:, 1] = zeros
-km = KMeans(n_clusters=2)
-cluster_col[:, 2] = km.fit_predict(cluster_col[:,0:1])
+km = KMeans(n_clusters=2) #set number of clusters to two (whitespace and nonwhitespace)
+cluster_col[:, 2] = km.fit_predict(cluster_col[:,0:1]) #run algoirthm on projection histogram
 
 
 # Part 4: Calculate Widths of Candidate Column and Row Boundaries
@@ -205,11 +208,15 @@ candidate_row = candidate_row[np.where(candidate_row[:,3] > 20)]
 lined = cv2.cvtColor(binarised, cv2.COLOR_GRAY2BGR)
 scale = 1280/lined.shape[1]
 lined = cv2.resize(lined, (0,0), fx = scale, fy = scale)
+
+# Draw vertical lines by incrementing on candidate_col
 for i in range(0, len(candidate_col)):
     cv2.line(lined,
              (int(candidate_col[i,2]*scale), 0),
              (int(candidate_col[i,2]*scale), lined.shape[0]),
              (0,0,255), 1)
+
+# Draw horizontal lines by incrementing on candidate_row
 for i in range(0, len(candidate_row)):
     cv2.line(lined,
              (0, int(candidate_row[i,2]*scale)),
@@ -238,9 +245,9 @@ for i in range(0,len(row_coords)-1):
         if len(contours) > 0:
             x, y, w, h = cv2.boundingRect(contours[0])
             cropped = cropped[y:(y + h), x:(x + w)]
-        #cv2.imshow("cropped", cropped)
-        #cv2.waitKey(0)
-        #cv2.destroyAllWindows()
+        cv2.imshow("cropped", cropped)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
         data = pytesseract.image_to_data(cropped, output_type='data.frame')
         if max(data['conf']) > 80:
             output[i][j] = pytesseract.image_to_string(cropped)
@@ -250,6 +257,3 @@ for i in range(0,len(row_coords)-1):
 
 df = pd.DataFrame(output)
 df.to_excel("output.xlsx")
-
-
-
